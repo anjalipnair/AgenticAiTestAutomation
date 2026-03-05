@@ -37,9 +37,10 @@
     "format:tests": "prettier --write tests/",
     "clean:reports": "rm -rf playwright-report test-results",
     "setup:ci": "npm ci && npm run install:browsers",
-    "generate-dashboard": "mkdir -p dashboard && node -e \"console.log('Generating test dashboard...')\" && npm run create-dashboard-html",
-    "create-dashboard-html": "node -e \"require('fs').writeFileSync('dashboard/index.html', '<!DOCTYPE html><html><head><title>Test Dashboard</title></head><body><h1>OpenCart Test Dashboard</h1><p>Dashboard generated at: ' + new Date().toISOString() + '</p><p>📊 <a href=\\\"../playwright-report/index.html\\\">View Latest Test Report</a></p></body></html>')\"",
-    "serve-dashboard": "cd dashboard && python3 -m http.server 8080 || python -m SimpleHTTPServer 8080"
+    "generate-dashboard": "node scripts/generate-dashboard.js",
+    "serve-dashboard": "cd dashboard && python3 -m http.server 8080 || python -m SimpleHTTPServer 8080",
+    "dashboard": "npm run generate-dashboard && npm run serve-dashboard",
+    "test:with-dashboard": "npm test && npm run generate-dashboard"
   },
   "keywords": ["playwright", "testing", "automation", "opencart", "ci/cd"],
   "author": "OpenCart Test Automation Team",
