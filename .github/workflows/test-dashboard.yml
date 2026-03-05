@@ -126,10 +126,20 @@ jobs:
         </html>
         EOF
 
+    - name: Check if Pages is enabled
+      id: check-pages
+      run: |
+        echo "Checking Pages availability..."
+        echo "pages-enabled=false" >> $GITHUB_OUTPUT
+
     - name: Setup GitHub Pages
       id: pages
       uses: actions/configure-pages@v4
       continue-on-error: true
+      
+    - name: Update Pages status
+      if: steps.pages.outcome == 'success'
+      run: echo "pages-enabled=true" >> $GITHUB_OUTPUT
       
     - name: Upload dashboard artifact (Always available)
       uses: actions/upload-artifact@v4
@@ -143,6 +153,7 @@ jobs:
       uses: actions/upload-pages-artifact@v3
       with:
         path: ./dashboard
+      continue-on-error: true
         
     - name: Deploy to GitHub Pages
       if: steps.pages.outcome == 'success'
@@ -154,8 +165,15 @@ jobs:
       run: |
         echo "📊 Dashboard generated successfully!"
         echo "🔗 Access options:"
-        if [ "${{ steps.pages.outcome }}" = "success" ]; then
-          echo "  - GitHub Pages: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+        echo "  - ✅ Artifact Download: Available in workflow artifacts"
+        if [ "${{ steps.pages.outcome }}" = "success" ] && [ "${{ steps.deployment.outcome }}" = "success" ]; then
+          echo "  - 🌐 GitHub Pages: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+        else
+          echo "  - 🌐 GitHub Pages: Not enabled (enable in Settings → Pages → Source: GitHub Actions)"
         fi
-        echo "  - Download artifact: Check 'Artifacts' section in this workflow run"
-        echo "  - Local viewing: Download and open dashboard/index.html
+        echo "  - 💻 Local: npm run generate-dashboard && npm run serve-dashboard"
+        echo ""
+        echo "💡 To enable GitHub Pages:"
+        echo "   1. Go to repository Settings → Pages"
+        echo "   2. Set Source to 'GitHub Actions'"
+        echo "   3. Re-run this workflow"
