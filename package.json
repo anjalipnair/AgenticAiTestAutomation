@@ -38,9 +38,12 @@
     "clean:reports": "rm -rf playwright-report test-results",
     "setup:ci": "npm ci && npm run install:browsers",
     "generate-dashboard": "node scripts/generate-dashboard.js",
+    "generate-impact-analysis": "node scripts/generate-impact-dashboard.js",
     "serve-dashboard": "cd dashboard && python3 -m http.server 8080 || python -m SimpleHTTPServer 8080",
     "dashboard": "npm run generate-dashboard && npm run serve-dashboard",
-    "test:with-dashboard": "npm test && npm run generate-dashboard"
+    "impact-analysis": "npm run generate-impact-analysis && cd dashboard && python3 -m http.server 9091",
+    "test:with-dashboard": "npm test && npm run generate-dashboard",
+    "full-analysis": "npm run generate-dashboard && npm run generate-impact-analysis && echo 'Dashboards ready: http://localhost:9090 and http://localhost:9091'"
   },
   "keywords": ["playwright", "testing", "automation", "opencart", "ci/cd"],
   "author": "OpenCart Test Automation Team",
