@@ -220,7 +220,7 @@ export class TestDataFactory {
       'visual-testing': this.forVisualTesting()
     };
 
-    return scenarios[scenarioName] || this.forSuccessfulLogin();
+    return scenarios[scenarioName as keyof typeof scenarios] || this.forSuccessfulLogin();
   }
 
   // Generate test data with custom configuration

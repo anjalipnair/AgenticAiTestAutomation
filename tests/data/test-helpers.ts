@@ -67,12 +67,12 @@ export class TestDataHelper {
 
   // Get browser-specific test data
   static getBrowserTestData(browserName: string) {
-    return LoginTestData.browsers[browserName] || LoginTestData.browsers.chrome;
+    return LoginTestData.browsers[browserName as keyof typeof LoginTestData.browsers] || LoginTestData.browsers.chrome;
   }
 
   // Get viewport-specific test data
   static getViewportTestData(deviceType: string) {
-    return LoginTestData.viewports[deviceType] || LoginTestData.viewports.desktop;
+    return LoginTestData.viewports[deviceType as keyof typeof LoginTestData.viewports] || LoginTestData.viewports.desktop;
   }
 
   // Generate realistic test user data
@@ -168,6 +168,6 @@ export class TestDataHelper {
       'boundary-test': LoginTestData.boundaryTests.longEmail
     };
 
-    return scenarioMap[scenario] || LoginTestData.validCredentials;
+    return scenarioMap[scenario as keyof typeof scenarioMap] || LoginTestData.validCredentials;
   }
 }

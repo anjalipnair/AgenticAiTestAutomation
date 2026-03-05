@@ -43,7 +43,7 @@ export const EnvironmentConfig = {
   // Get environment-specific data
   getEnvironmentData(): any {
     const env = process.env.TEST_ENV || 'demo';
-    return this.environments[env] || this.environments.demo;
+    return this.environments[env as keyof typeof this.environments] || this.environments.demo;
   },
 
   // Get base URL for current environment
@@ -161,7 +161,7 @@ export const EnvironmentConfig = {
   // Get browser settings for current environment
   getBrowserSettings() {
     const env = process.env.TEST_ENV || 'demo';
-    return this.browserSettings[env] || this.browserSettings.demo;
+    return this.browserSettings[env as keyof typeof this.browserSettings] || this.browserSettings.demo;
   },
 
   // Logging configuration
@@ -203,7 +203,7 @@ export const EnvironmentConfig = {
   // Get performance thresholds for current environment
   getPerformanceThresholds() {
     const env = process.env.TEST_ENV || 'demo';
-    return this.performanceThresholds[env] || this.performanceThresholds.demo;
+    return this.performanceThresholds[env as keyof typeof this.performanceThresholds] || this.performanceThresholds.demo;
   },
 
   // CI/CD specific configurations
