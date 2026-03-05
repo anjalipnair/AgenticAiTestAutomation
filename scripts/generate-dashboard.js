@@ -12,25 +12,44 @@ if (!fs.existsSync(dashboardDir)) {
 // Read test results if available
 let testResults = null;
 try {
-    const resultsPath = path.join(process.cwd(), 'test-results', 'results.json');
-    if (fs.existsSync(resultsPath)) {
-        testResults = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
+    // Try multiple possible locations for test results
+    const possiblePaths = [
+        path.join(process.cwd(), 'test-results.json'),
+        path.join(process.cwd(), 'test-results', 'results.json'),
+        path.join(process.cwd(), 'playwright-report', 'results.json')
+    ];
+    
+    for (const resultsPath of possiblePaths) {
+        if (fs.existsSync(resultsPath)) {
+            testResults = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
+            console.log(`📊 Using test results from: ${resultsPath}`);
+            break;
+        }
+    }
+    
+    if (!testResults) {
+        console.log('📋 No test results found in standard locations, using demo data');
     }
 } catch (e) {
-    console.log('No test results found, using demo data');
+    console.log('❌ Error reading test results:', e.message);
+    console.log('📋 Using demo data instead');
 }
 
-// Calculate metrics from test results or use demo data
+// Calculate metrics from actual test results or use demo data
 const metrics = testResults ? calculateMetrics(testResults) : {
-    successRate: 98,
+    successRate: 100,
     avgResponseTime: 2.1,
     coverage: 100,
     browsers: 3,
-    totalTests: 9,
-    passedTests: 9,
+    totalTests: 12,
+    passedTests: 12,
     failedTests: 0,
     lastRun: new Date().toISOString()
 };
+
+// Log what we're using
+console.log(`📈 Dashboard metrics: ${metrics.passedTests}/${metrics.totalTests} tests passed (${metrics.successRate}%)`);
+console.log(testResults ? '✅ Using real test data' : '🔄 Using demo data - run tests to see actual results');
 
 // Generate trend data (could be enhanced to read from history)
 const trendData = {
@@ -731,31 +750,41 @@ console.log(`📊 Dashboard location: ${path.join(dashboardDir, 'index.html')}`)
 console.log('🌐 Run "npm run serve-dashboard" to view locally');
 
 function calculateMetrics(results) {
-    if (!results || !results.suites) {
+    if (!results || (!results.suites && !results.stats)) {
         return null;
     }
     
     let totalTests = 0;
     let passedTests = 0;
     
-    results.suites.forEach(suite => {
-        if (suite.specs) {
-            suite.specs.forEach(spec => {
-                if (spec.tests) {
-                    spec.tests.forEach(test => {
-                        totalTests++;
-                        if (test.results && test.results.some(result => result.status === 'passed')) {
-                            passedTests++;
-                        }
-                    });
-                }
-            });
-        }
-    });
+    // Handle different result formats
+    if (results.stats) {
+        // Playwright JSON format with stats
+        totalTests = results.stats.expected + results.stats.unexpected + results.stats.flaky;
+        passedTests = results.stats.expected;
+    } else if (results.suites) {
+        // Detailed suites format
+        results.suites.forEach(suite => {
+            if (suite.specs) {
+                suite.specs.forEach(spec => {
+                    if (spec.tests) {
+                        spec.tests.forEach(test => {
+                            totalTests++;
+                            if (test.results && test.results.some(result => result.status === 'passed')) {
+                                passedTests++;
+                            }
+                        });
+                    }
+                });
+            }
+        });
+    }
+    
+    const successRate = totalTests > 0 ? Math.round((passedTests / totalTests) * 100) : 100;
     
     return {
-        successRate: totalTests > 0 ? Math.round((passedTests / totalTests) * 100) : 0,
-        avgResponseTime: 2.1, // Could be calculated from test durations
+        successRate,
+        avgResponseTime: calculateAvgResponseTime(results) || 2.1,
         coverage: 100,
         browsers: 3,
         totalTests,
@@ -763,4 +792,33 @@ function calculateMetrics(results) {
         failedTests: totalTests - passedTests,
         lastRun: new Date().toISOString()
     };
+}
+
+// Calculate average response time from test durations
+function calculateAvgResponseTime(results) {
+    if (!results.suites) return null;
+    
+    let totalDuration = 0;
+    let testCount = 0;
+    
+    results.suites.forEach(suite => {
+        if (suite.specs) {
+            suite.specs.forEach(spec => {
+                if (spec.tests) {
+                    spec.tests.forEach(test => {
+                        if (test.results) {
+                            test.results.forEach(result => {
+                                if (result.duration) {
+                                    totalDuration += result.duration;
+                                    testCount++;
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+        }
+    });
+    
+    return testCount > 0 ? Math.round((totalDuration / testCount) / 1000 * 10) / 10 : null;
 }
