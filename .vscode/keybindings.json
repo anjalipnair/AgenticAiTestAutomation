@@ -1,0 +1,67 @@
+[
+  {
+    "key": "cmd+shift+t",
+    "command": "workbench.action.tasks.runTask",
+    "args": "🧪 Run All Tests",
+    "when": "!terminalFocus"
+  },
+  {
+    "key": "cmd+shift+l",
+    "command": "workbench.action.tasks.runTask", 
+    "args": "🔐 Run Login Tests"
+  },
+  {
+    "key": "cmd+shift+u",
+    "command": "workbench.action.tasks.runTask",
+    "args": "🎯 Run Tests with UI"
+  },
+  {
+    "key": "cmd+shift+d",
+    "command": "workbench.action.tasks.runTask",
+    "args": "🐛 Debug Test"
+  },
+  {
+    "key": "cmd+shift+r",
+    "command": "workbench.action.tasks.runTask",
+    "args": "📊 Open Test Report"
+  },
+  {
+    "key": "cmd+shift+j",
+    "command": "workbench.action.tasks.runTask",
+    "args": "🎟️ Test + Jira Integration"
+  },
+  {
+    "key": "cmd+shift+s",
+    "command": "workbench.action.tasks.runTask",
+    "args": "📈 Start Dashboard Server" 
+  },
+  {
+    "key": "cmd+shift+o",
+    "command": "workbench.action.tasks.runTask",
+    "args": "🌐 Open Dashboard"
+  },
+  {
+    "key": "cmd+shift+b",
+    "command": "workbench.action.tasks.runTask",
+    "args": "🔗 Open Jira Board"
+  },
+  {
+    "key": "cmd+shift+w",
+    "command": "workbench.action.tasks.runTask",
+    "args": "🚀 Complete Test Workflow"
+  },
+  {
+    "key": "ctrl+`",
+    "command": "workbench.action.terminal.newWithProfile",
+    "args": {
+      "profileName": "AICommunityDemo Bash"
+    }
+  },
+  {
+    "key": "ctrl+shift+`",
+    "command": "workbench.action.terminal.newWithProfile",
+    "args": {
+      "profileName": "Playwright Testing"
+    }
+  }
+]

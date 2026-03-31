@@ -1,0 +1,191 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "🧪 Run All Tests",
+      "type": "shell",
+      "command": "npx playwright test",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": true,
+        "clear": false
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "🔐 Run Login Tests",
+      "type": "shell",
+      "command": "npx playwright test tests/login/",
+      "group": "test",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "🎯 Run Tests with UI",
+      "type": "shell",
+      "command": "npx playwright test --ui",
+      "group": "test",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "new"
+      }
+    },
+    {
+      "label": "🐛 Debug Test",
+      "type": "shell",
+      "command": "npx playwright test --debug",
+      "group": "test",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "new"
+      }
+    },
+    {
+      "label": "📊 Open Test Report",
+      "type": "shell",
+      "command": "npx playwright show-report",
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "silent",
+        "focus": false
+      }
+    },
+    {
+      "label": "🎟️ Test + Jira Integration",
+      "type": "shell",
+      "command": "npm run jira:test-and-log",
+      "group": "test",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "dependsOn": []
+    },
+    {
+      "label": "📈 Start Dashboard Server",
+      "type": "shell",
+      "command": "python3 -m http.server 8083",
+      "options": {
+        "cwd": "${workspaceFolder}/dashboard"
+      },
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "dedicated"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": [
+          {
+            "regexp": ".",
+            "file": 1,
+            "location": 2,
+            "message": 3
+          }
+        ],
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".",
+          "endsPattern": "Serving HTTP"
+        }
+      }
+    },
+    {
+      "label": "🔄 Refresh Dashboard Data",
+      "type": "shell",
+      "command": "./refresh-dashboard.sh",
+      "options": {
+        "cwd": "${workspaceFolder}/dashboard"
+      },
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false
+      }
+    },
+    {
+      "label": "🌐 Open Dashboard",
+      "type": "shell",
+      "command": "open",
+      "args": ["http://localhost:8083/interactive-test-dashboard.html"],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "silent",
+        "focus": false
+      }
+    },
+    {
+      "label": "🔗 Open Jira Board",
+      "type": "shell",
+      "command": "open",
+      "args": ["https://mercator-team-nair.atlassian.net/jira/software/c/projects/DM06032026/boards/199/backlog"],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "silent"
+      }
+    },
+    {
+      "label": "🚀 Complete Test Workflow",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "🧪 Run All Tests",
+        "🎟️ Test + Jira Integration", 
+        "🔄 Refresh Dashboard Data"
+      ],
+      "group": "test",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "🔧 Setup Terminal Environment",
+      "type": "shell",
+      "command": "source .vscode/terminal-setup.sh",
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false
+      }
+    },
+    {
+      "label": "📊 Open Test Dashboard",
+      "type": "shell",
+      "command": "./launch-dashboard.sh",
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    }
+  ]
+}
