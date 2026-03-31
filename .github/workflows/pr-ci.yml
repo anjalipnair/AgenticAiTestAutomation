@@ -1,0 +1,356 @@
+name: 🔄 Pull Request CI
+
+on:
+  pull_request:
+    branches: [ main, master, develop ]
+    paths:
+      - 'tests/**'
+      - 'specs/**'
+      - 'scripts/**'
+      - 'playwright.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/**'
+
+  push:
+    branches: [ main, master, develop ]
+    paths:
+      - 'tests/**'
+      - 'specs/**'
+      - 'scripts/**'
+      - 'playwright.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+
+env:
+  CI: true
+  NODE_VERSION: '20'
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 0
+
+jobs:
+  changes:
+    name: 🔍 Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      tests: ${{ steps.changes.outputs.tests }}
+      config: ${{ steps.changes.outputs.config }}
+      specs: ${{ steps.changes.outputs.specs }}
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔍 Detect file changes
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            tests:
+              - 'tests/**'
+            config:
+              - 'playwright.config.ts'
+              - 'package.json'
+              - 'package-lock.json'
+            specs:
+              - 'specs/**'
+
+  validate:
+    name: ✅ Validate & Lint
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.tests == 'true' || needs.changes.outputs.config == 'true'
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: |
+          npm ci
+          npx playwright install --with-deps
+
+      - name: 🔍 Lint tests
+        run: |
+          if [ -f "package.json" ] && grep -q "lint:tests" package.json; then
+            npm run lint:tests
+          else
+            echo "⚠️ Linting script not found - skipping"
+          fi
+
+      - name: 📝 Format check
+        run: |
+          if [ -f "package.json" ] && grep -q "format:tests" package.json; then
+            npm run format:tests
+          else
+            echo "⚠️ Format script not found - skipping"
+          fi
+
+  quick-tests:
+    name: 🏃 Quick Tests
+    runs-on: ubuntu-latest
+    needs: [changes, validate]
+    if: needs.changes.outputs.tests == 'true' || needs.changes.outputs.config == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        test-type: [smoke, login]
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📦 Install dependencies & browsers
+        run: |
+          npm ci
+          npx playwright install --with-deps
+
+      - name: 🏃 Run quick tests
+        run: |
+          case "${{ matrix.test-type }}" in
+            "smoke")
+              npm run test:smoke
+              ;;
+            "login")
+              npm run test:login
+              ;;
+          esac
+
+      - name: 📊 Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quick-test-results-${{ matrix.test-type }}
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+
+  security-check:
+    name: 🛡️ Security Check
+    runs-on: ubuntu-latest
+    needs: [changes, validate]
+    if: needs.changes.outputs.tests == 'true' || needs.changes.outputs.config == 'true'
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📦 Install dependencies & browsers
+        run: |
+          npm ci
+          npx playwright install --with-deps
+
+      - name: 🛡️ Run security tests
+        run: npm run test:security
+        continue-on-error: true
+
+      - name: 📊 Upload security results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr-security-results
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+
+  cross-browser:
+    name: 🌐 Cross-Browser Tests
+    runs-on: ubuntu-latest
+    needs: [changes, validate, quick-tests]
+    if: needs.changes.outputs.tests == 'true' || needs.changes.outputs.config == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📦 Install dependencies & browsers
+        run: |
+          npm ci
+          npx playwright install --with-deps
+
+      - name: 🌐 Run cross-browser tests
+        run: |
+          npx playwright test tests/login/ --project=${{ matrix.browser }}
+
+      - name: 📊 Upload cross-browser results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cross-browser-results-${{ matrix.browser }}
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+
+  test-coverage:
+    name: 📈 Test Coverage Analysis
+    runs-on: ubuntu-latest
+    needs: [quick-tests, security-check, cross-browser]
+    if: always()
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 📥 Download all test results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: "*-results*"
+          merge-multiple: true
+          path: ./pr-test-results
+
+      - name: 📈 Generate coverage report
+        run: |
+          echo "## 📊 Test Coverage Summary" > coverage-summary.md
+          echo "" >> coverage-summary.md
+          echo "### Quick Tests Results:" >> coverage-summary.md
+          
+          # Count test files and results
+          if [ -d "./pr-test-results" ]; then
+            TOTAL_TESTS=$(find ./pr-test-results -name "*.json" 2>/dev/null | wc -l || echo "0")
+            echo "- Total test result files: $TOTAL_TESTS" >> coverage-summary.md
+          else
+            echo "- No test results found" >> coverage-summary.md
+          fi
+          
+          cat coverage-summary.md
+
+      - name: 📊 Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-coverage-report
+          path: coverage-summary.md
+          retention-days: 7
+
+  performance-impact:
+    name: ⚡ Performance Impact
+    runs-on: ubuntu-latest
+    needs: [changes, validate]
+    if: needs.changes.outputs.tests == 'true' || needs.changes.outputs.config == 'true'
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📦 Install dependencies & browsers
+        run: |
+          npm ci
+          npx playwright install --with-deps
+
+      - name: ⚡ Run performance tests
+        run: |
+          npm run test:performance || echo "⚠️ Performance tests not available"
+          
+      - name: 📊 Upload performance results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr-performance-results
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+
+  pr-summary:
+    name: 📋 PR Summary
+    runs-on: ubuntu-latest
+    needs: [changes, validate, quick-tests, security-check, cross-browser, performance-impact]
+    if: always()
+    steps:
+      - name: 📊 Calculate overall status
+        id: status
+        run: |
+          VALIDATE_STATUS="${{ needs.validate.result }}"
+          QUICK_STATUS="${{ needs.quick-tests.result }}"
+          SECURITY_STATUS="${{ needs.security-check.result }}"
+          CROSS_BROWSER_STATUS="${{ needs.cross-browser.result }}"
+          PERFORMANCE_STATUS="${{ needs.performance-impact.result }}"
+          
+          if [ "$VALIDATE_STATUS" == "success" ] && [ "$QUICK_STATUS" == "success" ] && [ "$SECURITY_STATUS" != "failure" ] && [ "$CROSS_BROWSER_STATUS" == "success" ]; then
+            echo "overall=✅ PASS" >> $GITHUB_OUTPUT
+            echo "color=green" >> $GITHUB_OUTPUT
+          else
+            echo "overall=❌ FAIL" >> $GITHUB_OUTPUT
+            echo "color=red" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 📋 Create PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const output = `## 🚀 CI/CD Results for PR #${{ github.event.number }}
+            
+            **Overall Status: ${{ steps.status.outputs.overall }}**
+            
+            ### 📊 Job Results:
+            | Job | Status |
+            |-----|--------|
+            | Validation & Lint | ${{ needs.validate.result }} |
+            | Quick Tests | ${{ needs.quick-tests.result }} |
+            | Security Check | ${{ needs.security-check.result }} |
+            | Cross-Browser | ${{ needs.cross-browser.result }} |
+            | Performance | ${{ needs.performance-impact.result }} |
+            
+            ### 🔍 Changes Detected:
+            - Tests: ${{ needs.changes.outputs.tests }}
+            - Config: ${{ needs.changes.outputs.config }}
+            - Specs: ${{ needs.changes.outputs.specs }}
+            
+            ### 📈 Artifacts Available:
+            - Test Reports
+            - Security Scan Results
+            - Cross-Browser Results
+            - Performance Impact Analysis
+            
+            ---
+            *Last updated: ${new Date().toISOString()}*
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
+
+      - name: 📋 Create summary
+        run: |
+          echo "## 🚀 Pull Request CI Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Overall Status:** ${{ steps.status.outputs.overall }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Detailed Results:" >> $GITHUB_STEP_SUMMARY
+          echo "- **Validation:** ${{ needs.validate.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Quick Tests:** ${{ needs.quick-tests.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Security Check:** ${{ needs.security-check.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Cross-Browser:** ${{ needs.cross-browser.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Performance:** ${{ needs.performance-impact.result }}" >> $GITHUB_STEP_SUMMARY

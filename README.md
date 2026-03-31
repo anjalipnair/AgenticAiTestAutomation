@@ -1,12 +1,14 @@
-# 🤖 OpenCart Test Automation Framework
+# 🤖 SauceDemo Test Automation Framework
 
-*Enterprise-grade test automation framework with intelligent CI/CD pipeline for OpenCart e-commerce testing*
+*Enterprise-grade test automation framework with intelligent CI/CD pipeline for SauceDemo.com testing*
 
 ## 🚀 CI/CD Status
 
-[![Daily Tests](https://github.com/anjalipnair/AgenticAiTestAutomation/actions/workflows/schedule-tests.yml/badge.svg)](https://github.com/anjalipnair/AgenticAiTestAutomation/actions/workflows/schedule-tests.yml)
-[![PR Tests](https://github.com/anjalipnair/AgenticAiTestAutomation/actions/workflows/pr-tests.yml/badge.svg)](https://github.com/anjalipnair/AgenticAiTestAutomation/actions/workflows/pr-tests.yml)
-[![Test Dashboard](https://github.com/anjalipnair/AgenticAiTestAutomation/actions/workflows/test-dashboard.yml/badge.svg)](https://anjalipnair.github.io/AgenticAiTestAutomation/)
+[![Daily CI/CD](https://github.com/YOUR_USERNAME/YOUR_REPO/actions/workflows/daily-ci-cd.yml/badge.svg)](https://github.com/YOUR_USERNAME/YOUR_REPO/actions/workflows/daily-ci-cd.yml)
+[![Weekly Tests](https://github.com/YOUR_USERNAME/YOUR_REPO/actions/workflows/weekly-comprehensive.yml/badge.svg)](https://github.com/YOUR_USERNAME/YOUR_REPO/actions/workflows/weekly-comprehensive.yml)
+[![PR CI](https://github.com/YOUR_USERNAME/YOUR_REPO/actions/workflows/pr-ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/YOUR_REPO/actions/workflows/pr-ci.yml)
+
+> **📋 CI/CD Documentation:** See [.github/README-CICD.md](.github/README-CICD.md) for complete setup and usage instructions.
 
 [![Test Coverage](https://img.shields.io/badge/Coverage-100%25-brightgreen)](./specs/opencart-login-test-plan.md)
 [![Automation Coverage](https://img.shields.io/badge/Automation-100%25-brightgreen)](./tests/)

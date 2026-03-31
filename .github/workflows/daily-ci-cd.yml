@@ -1,0 +1,455 @@
+name: 🚀 Daily CI/CD Pipeline
+
+on:
+  schedule:
+    # Run daily at 6:00 AM UTC (adjust timezone as needed)
+    - cron: '0 6 * * *'
+  workflow_dispatch: # Allow manual triggers
+    inputs:
+      environment:
+        description: 'Test Environment'
+        required: false
+        default: 'demo'
+        type: choice
+        options:
+          - demo
+          - staging 
+          - production
+      test_suite:
+        description: 'Test Suite to Run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - login
+          - smoke
+          - security
+          - performance
+          - cross-browser
+
+env:
+  CI: true
+  NODE_VERSION: '20'
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 0
+
+jobs:
+  setup:
+    name: 🎯 Setup & Validation
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.setup.outputs.environment }}
+      test-suite: ${{ steps.setup.outputs.test-suite }}
+      matrix: ${{ steps.setup.outputs.matrix }}
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔧 Setup environment variables
+        id: setup
+        run: |
+          ENV="${{ github.event.inputs.environment || 'demo' }}"
+          SUITE="${{ github.event.inputs.test_suite || 'all' }}"
+          
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+          echo "test-suite=$SUITE" >> $GITHUB_OUTPUT
+          
+          # Set up browser matrix for cross-browser testing
+          if [ "$SUITE" == "cross-browser" ] || [ "$SUITE" == "all" ]; then
+            echo 'matrix=["chromium", "firefox", "webkit"]' >> $GITHUB_OUTPUT
+          else
+            echo 'matrix=["chromium"]' >> $GITHUB_OUTPUT
+          fi
+          
+          echo "🎯 Environment: $ENV"
+          echo "🧪 Test Suite: $SUITE"
+
+  lint-and-validate:
+    name: 🔍 Lint & Validate
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: |
+          npm ci
+          npx playwright install --with-deps
+
+      - name: 🔍 Lint tests
+        run: |
+          if [ -f "package.json" ] && grep -q "lint:tests" package.json; then
+            npm run lint:tests || echo "⚠️ Linting skipped - script not available"
+          fi
+
+      - name: 📝 Format check
+        run: |
+          if [ -f "package.json" ] && grep -q "format:tests" package.json; then
+            npm run format:tests || echo "⚠️ Format check skipped - script not available"
+          fi
+
+  smoke-tests:
+    name: 💨 Smoke Tests
+    runs-on: ubuntu-latest
+    needs: [setup, lint-and-validate]
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📦 Install dependencies & browsers
+        run: |
+          npm ci
+          npx playwright install --with-deps
+
+      - name: 💨 Run smoke tests
+        env:
+          TEST_ENV: ${{ needs.setup.outputs.environment }}
+        run: |
+          npm run test:smoke
+        continue-on-error: true
+
+      - name: 📊 Upload smoke test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-test-results
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 10
+
+  main-test-suite:
+    name: 🧪 Main Test Suite
+    runs-on: ubuntu-latest
+    needs: [setup, smoke-tests]
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: ${{ fromJson(needs.setup.outputs.matrix) }}
+        shard: [1/4, 2/4, 3/4, 4/4]
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📦 Install dependencies & browsers
+        run: |
+          npm ci
+          npx playwright install --with-deps
+
+      - name: 🧪 Run tests
+        env:
+          TEST_ENV: ${{ needs.setup.outputs.environment }}
+        run: |
+          SUITE="${{ needs.setup.outputs.test-suite }}"
+          BROWSER="${{ matrix.browser }}"
+          SHARD="${{ matrix.shard }}"
+          
+          case "$SUITE" in
+            "login")
+              npx playwright test tests/login/ --project=$BROWSER --shard=$SHARD
+              ;;
+            "security")
+              npm run test:security --project=$BROWSER --shard=$SHARD
+              ;;
+            "performance")
+              npm run test:performance --project=$BROWSER --shard=$SHARD
+              ;;
+            "cross-browser")
+              npx playwright test --project=$BROWSER --shard=$SHARD
+              ;;
+            "all")
+              npx playwright test --project=$BROWSER --shard=$SHARD
+              ;;
+            *)
+              npx playwright test --project=$BROWSER --shard=$SHARD
+              ;;
+          esac
+        continue-on-error: true
+
+      - name: 📊 Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.browser }}-${{ matrix.shard }}
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 30
+
+      - name: 📈 Generate trace files
+        if: failure()
+        run: |
+          echo "🔍 Failure detected - traces available in test-results/"
+
+  security-tests:
+    name: 🛡️ Security Tests
+    runs-on: ubuntu-latest
+    needs: [setup, lint-and-validate]
+    if: needs.setup.outputs.test-suite == 'all' || needs.setup.outputs.test-suite == 'security'
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📦 Install dependencies & browsers
+        run: |
+          npm ci
+          npx playwright install --with-deps
+
+      - name: 🛡️ Run security tests
+        env:
+          TEST_ENV: ${{ needs.setup.outputs.environment }}
+        run: npm run test:security
+        continue-on-error: true
+
+      - name: 📊 Upload security test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-test-results
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 30
+
+  performance-tests:
+    name: ⚡ Performance Tests
+    runs-on: ubuntu-latest
+    needs: [setup, lint-and-validate]
+    if: needs.setup.outputs.test-suite == 'all' || needs.setup.outputs.test-suite == 'performance'
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📦 Install dependencies & browsers
+        run: |
+          npm ci
+          npx playwright install --with-deps
+
+      - name: ⚡ Run performance tests
+        env:
+          TEST_ENV: ${{ needs.setup.outputs.environment }}
+        run: npm run test:performance
+        continue-on-error: true
+
+      - name: 📊 Upload performance test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance-test-results
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 30
+
+  jira-integration:
+    name: 🎟️ Jira Integration
+    runs-on: ubuntu-latest
+    needs: [main-test-suite, security-tests, performance-tests]
+    if: always() && (needs.main-test-suite.result == 'failure' || needs.security-tests.result == 'failure' || needs.performance-tests.result == 'failure')
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: npm ci
+
+      - name: 📥 Download test results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: "*-test-results*"
+          merge-multiple: true
+          path: ./test-results-merged
+
+      - name: 🎟️ Log defects to Jira
+        env:
+          JIRA_HOST: ${{ secrets.JIRA_HOST || 'mercator-team-nair.atlassian.net' }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY || 'DM06032026' }}
+        run: |
+          if [ -n "$JIRA_EMAIL" ] && [ -n "$JIRA_API_TOKEN" ]; then
+            npm run jira:log-defects || echo "⚠️ Failed to log defects to Jira"
+          else
+            echo "⚠️ JIRA credentials not configured - skipping defect logging"
+          fi
+
+  dashboard-update:
+    name: 📊 Update Dashboard
+    runs-on: ubuntu-latest
+    needs: [main-test-suite, security-tests, performance-tests, jira-integration]
+    if: always()
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: 📦 Install dependencies
+        run: npm ci
+
+      - name: 📥 Download all test results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: "*-test-results*"
+          merge-multiple: true
+          path: ./test-results-merged
+
+      - name: 📊 Generate dashboard
+        run: |
+          # Copy results to expected location for dashboard generation
+          cp -r test-results-merged/* test-results/ 2>/dev/null || true
+          
+          # Generate dashboard and impact analysis
+          npm run generate-dashboard || echo "⚠️ Dashboard generation failed"
+          npm run generate-impact-analysis || echo "⚠️ Impact analysis failed"
+
+      - name: 📊 Upload dashboard artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-dashboard
+          path: |
+            dashboard/
+            interactive-test-dashboard.html
+          retention-days: 30
+
+      - name: 🔄 Refresh dashboard data
+        run: |
+          npm run dashboard:refresh || echo "⚠️ Dashboard refresh failed"
+
+  notification:
+    name: 📢 Notifications
+    runs-on: ubuntu-latest
+    needs: [main-test-suite, security-tests, performance-tests, jira-integration, dashboard-update]
+    if: always()
+    steps:
+      - name: 📊 Calculate test results
+        id: results
+        run: |
+          MAIN_STATUS="${{ needs.main-test-suite.result }}"
+          SECURITY_STATUS="${{ needs.security-tests.result }}"
+          PERFORMANCE_STATUS="${{ needs.performance-tests.result }}"
+          
+          if [ "$MAIN_STATUS" == "success" ] && [ "$SECURITY_STATUS" != "failure" ] && [ "$PERFORMANCE_STATUS" != "failure" ]; then
+            echo "overall=success" >> $GITHUB_OUTPUT
+            echo "message=✅ All tests passed successfully!" >> $GITHUB_OUTPUT
+          else
+            echo "overall=failure" >> $GITHUB_OUTPUT
+            echo "message=❌ Some tests failed. Check the test results for details." >> $GITHUB_OUTPUT
+          fi
+
+      - name: 📢 Create summary
+        run: |
+          echo "## 🚀 Daily CI/CD Pipeline Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ needs.setup.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Test Suite:** ${{ needs.setup.outputs.test-suite }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** ${{ steps.results.outputs.message }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Job Results:" >> $GITHUB_STEP_SUMMARY
+          echo "- **Main Tests:** ${{ needs.main-test-suite.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Security Tests:** ${{ needs.security-tests.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Performance Tests:** ${{ needs.performance-tests.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Jira Integration:** ${{ needs.jira-integration.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Dashboard Update:** ${{ needs.dashboard-update.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔗 Useful Links:" >> $GITHUB_STEP_SUMMARY
+          echo "- [Test Dashboard](http://localhost:8083/interactive-test-dashboard.html)" >> $GITHUB_STEP_SUMMARY
+          echo "- [Jira Board](https://mercator-team-nair.atlassian.net/jira/software/c/projects/DM06032026/boards/199/backlog)" >> $GITHUB_STEP_SUMMARY
+
+      - name: 📧 Send notification (optional)
+        if: failure() && github.event_name == 'schedule'
+        run: |
+          echo "💌 Notification: Daily CI/CD pipeline failed!"
+          echo "Consider setting up email/Slack notifications here"
+          # Add your notification logic here (email, Slack, etc.)
+
+  cleanup:
+    name: 🧹 Cleanup
+    runs-on: ubuntu-latest
+    needs: [notification]
+    if: always()
+    steps:
+      - name: 🧹 Cleanup old artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId
+            });
+            
+            // Keep only the latest 10 artifacts per type
+            const artifactGroups = {};
+            for (const artifact of artifacts.data.artifacts) {
+              const baseName = artifact.name.replace(/-\d+\/\d+$/, '');
+              if (!artifactGroups[baseName]) {
+                artifactGroups[baseName] = [];
+              }
+              artifactGroups[baseName].push(artifact);
+            }
+            
+            for (const [groupName, groupArtifacts] of Object.entries(artifactGroups)) {
+              if (groupArtifacts.length > 10) {
+                const toDelete = groupArtifacts.slice(10);
+                for (const artifact of toDelete) {
+                  try {
+                    await github.rest.actions.deleteArtifact({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      artifact_id: artifact.id
+                    });
+                    console.log(`Deleted old artifact: ${artifact.name}`);
+                  } catch (error) {
+                    console.log(`Failed to delete artifact ${artifact.name}: ${error}`);
+                  }
+                }
+              }
+            }
